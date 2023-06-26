@@ -15,7 +15,7 @@ impl Drop for MemoryHandle {
             Self::Process(handle) => unsafe {
                 CloseHandle(*handle);
             },
-            _ => unimplemented!("Drop method not implemented for {:?}", &self),
+            _ => unimplemented!("Drop trait not implemented for {:?}", &self),
         }
     }
 }
@@ -26,7 +26,7 @@ impl Deref for MemoryHandle {
     fn deref(&self) -> &Self::Target {
         match self {
             MemoryHandle::Process(handle) => handle,
-            _ => unimplemented!("Deref method not implemented for {:?}", &self),
+            _ => unimplemented!("Deref trait not implemented for {:?}", &self),
         }
     }
 }

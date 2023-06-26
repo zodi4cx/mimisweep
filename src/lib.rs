@@ -17,7 +17,7 @@ use windows::{
 pub fn info() -> Result<()> {
     debug!("Opening Minesweeper process");
     let Some(pid) = utils::process_pid_by_name("minesweeper.exe") else {
-        bail!("No minesweeper in memory!");
+        bail!("no minesweeper in memory!");
     };
     trace!("Minesweeper PID: {pid}");
     let a_remote = unsafe {
@@ -26,12 +26,12 @@ pub fn info() -> Result<()> {
             false,
             pid,
         )
-        .context("Failed to open process")?;
+        .context("failed to open process")?;
         trace!("Process handle: {:?}", h_process);
         MemoryHandle::Process(h_process)
     };
     debug!("Extracting PE headers");
-    let peb: PEB = process::peb(&a_remote, false).context("Unable to access process' PEB")?;
+    let peb: PEB = process::peb(&a_remote, false).context("unable to access process' PEB")?;
     trace!("Retrieved PEB base address");
     debug!("{:#?}", peb.SessionId);
     Ok(())

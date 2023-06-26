@@ -52,5 +52,5 @@ fn read_from_process<T>(process: &HANDLE, data_ptr: *mut T) -> Result<T> {
     }
     .as_bool()
     .then_some(data)
-    .ok_or(anyhow!("Error reading memory of remote process"))
+    .ok_or(anyhow!("error reading memory of remote process"))
 }

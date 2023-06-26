@@ -17,14 +17,14 @@ pub fn peb(memory: &MemoryHandle, _is_wow: bool) -> Result<PEB> {
     }
 }
 
-fn peb_process(memory: &HANDLE, _is_wow: bool) -> Result<PEB> {
+fn peb_process(process: &HANDLE, _is_wow: bool) -> Result<PEB> {
     unsafe {
         let mut return_length = 0_u32;
         let mut process_informations: PROCESS_BASIC_INFORMATION = mem::zeroed();
         let process_information_length = mem::size_of::<PROCESS_BASIC_INFORMATION>() as u32;
         trace!("About to call NtQueryInformationProcess");
         NtQueryInformationProcess(
-            *memory,
+            *process,
             ProcessBasicInformation,
             &mut process_informations as *mut _ as _,
             process_information_length,
@@ -35,7 +35,7 @@ fn peb_process(memory: &HANDLE, _is_wow: bool) -> Result<PEB> {
             "unexpected result from NtQueryInformationProcess"
         );
         trace!("Finished call to NtQueryInformationProcess");
-        read_from_process(memory, process_informations.PebBaseAddress)
+        read_from_process(process, process_informations.PebBaseAddress)
     }
 }
 

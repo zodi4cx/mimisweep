@@ -2,7 +2,7 @@ use super::memory::MemoryHandle;
 
 use anyhow::{anyhow, ensure, Result};
 use log::trace;
-use std::{mem, ptr::addr_of_mut, os::windows::prelude::HandleOrInvalid};
+use std::{mem, ptr::addr_of_mut};
 #[allow(unused_imports)]
 use windows::Win32::{
     Foundation::*,

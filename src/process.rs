@@ -1,12 +1,12 @@
-use super::memory::MemoryHandle;
+use super::memory::{self, MemoryHandle};
 
 use anyhow::{anyhow, ensure, Result};
 use log::trace;
-use std::{mem, ptr::addr_of_mut, ffi::c_void};
+use std::{ffi::c_void, mem};
 #[allow(unused_imports)]
 use windows::Win32::{
     Foundation::*,
-    System::{Diagnostics::Debug::*, Kernel::*, Threading::*},
+    System::{Diagnostics::Debug::*, Kernel::*, SystemServices::*, Threading::*},
 };
 
 /// PEB definition that overrides windows' PEB struct based on online documentation.
@@ -32,19 +32,19 @@ pub struct BitField {
 /// Retrieves the PEB structure of the given memory handle
 pub fn peb(memory: &MemoryHandle, _is_wow: bool) -> Result<Peb> {
     match memory {
-        MemoryHandle::Process(handle) => peb_process(handle, _is_wow),
-        _ => unimplemented!("PEB extraction for {:?} is not implemented", memory)
+        MemoryHandle::Process(_) => peb_process(memory, _is_wow),
+        _ => unimplemented!("PEB extraction for {:?} is not implemented", memory),
     }
 }
 
-fn peb_process(process: &HANDLE, _is_wow: bool) -> Result<Peb> {
+fn peb_process(memory: &MemoryHandle, _is_wow: bool) -> Result<Peb> {
     unsafe {
         let mut return_length = 0_u32;
         let mut process_informations: PROCESS_BASIC_INFORMATION = mem::zeroed();
         let process_information_length = mem::size_of::<PROCESS_BASIC_INFORMATION>() as u32;
         trace!("About to call NtQueryInformationProcess");
         NtQueryInformationProcess(
-            *process,
+            **memory,
             ProcessBasicInformation,
             &mut process_informations as *mut _ as _,
             process_information_length,
@@ -55,22 +55,20 @@ fn peb_process(process: &HANDLE, _is_wow: bool) -> Result<Peb> {
             "unexpected result from NtQueryInformationProcess"
         );
         trace!("PEB address: {:?}", process_informations.PebBaseAddress);
-        read_from_process(process, process_informations.PebBaseAddress as *mut Peb)
+        memory::copy(memory, process_informations.PebBaseAddress as *const Peb)
     }
 }
 
-fn read_from_process<T>(process: &HANDLE, data_ptr: *mut T) -> Result<T> {
-    let mut data: T = unsafe { mem::zeroed() };
-    unsafe {
-        ReadProcessMemory(
-            *process,
-            data_ptr as *mut _,
-            addr_of_mut!(data) as *mut _,
-            mem::size_of::<T>(),
-            None,
-        )
-    }
-    .as_bool()
-    .then_some(data)
-    .ok_or(anyhow!("error reading memory of remote process"))
+// TODO: Should return IMAGE_NT_HEADERS32 if the process is x86
+pub fn nt_headers(process: &MemoryHandle, base: *const c_void) -> Result<IMAGE_NT_HEADERS64> {
+    let header_image_dos: IMAGE_DOS_HEADER = memory::copy(process, base as *const _)?;
+    ensure!(
+        header_image_dos.e_magic == IMAGE_DOS_SIGNATURE,
+        "invalid DOS signature"
+    );
+    let p_nt_headers = unsafe { base.offset(header_image_dos.e_lfanew as isize) };
+    let nt_headers: IMAGE_NT_HEADERS64 = memory::copy(process, p_nt_headers as *const _)?;
+    (nt_headers.Signature == IMAGE_NT_SIGNATURE)
+        .then_some(nt_headers)
+        .ok_or(anyhow!("invalid NT signature"))
 }

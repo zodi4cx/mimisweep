@@ -2,22 +2,42 @@ use super::memory::MemoryHandle;
 
 use anyhow::{anyhow, ensure, Result};
 use log::trace;
-use std::{mem, ptr::addr_of_mut};
+use std::{mem, ptr::addr_of_mut, ffi::c_void};
 #[allow(unused_imports)]
 use windows::Win32::{
     Foundation::*,
     System::{Diagnostics::Debug::*, Kernel::*, Threading::*},
 };
 
+/// PEB definition that overrides windows' PEB struct based on online documentation.
+#[repr(C)]
+pub struct Peb {
+    pub inherited_address_space: u8,
+    pub read_image_file_exec_options: u8,
+    pub being_debugged: u8,
+    pub bit_field: BitField,
+    pub mutant: HANDLE,
+    pub image_base_address: *mut c_void,
+    pub ldr: *mut PEB_LDR_DATA,
+    pub process_parameters: *mut RTL_USER_PROCESS_PARAMETERS,
+    // ...
+}
+
+#[repr(C)]
+pub struct BitField {
+    pub image_uses_large_pages: u8,
+    pub spare_bits: u8,
+}
+
 /// Retrieves the PEB structure of the given memory handle
-pub fn peb(memory: &MemoryHandle, _is_wow: bool) -> Result<PEB> {
+pub fn peb(memory: &MemoryHandle, _is_wow: bool) -> Result<Peb> {
     match memory {
         MemoryHandle::Process(handle) => peb_process(handle, _is_wow),
         _ => unimplemented!("PEB extraction for {:?} is not implemented", memory)
     }
 }
 
-fn peb_process(process: &HANDLE, _is_wow: bool) -> Result<PEB> {
+fn peb_process(process: &HANDLE, _is_wow: bool) -> Result<Peb> {
     unsafe {
         let mut return_length = 0_u32;
         let mut process_informations: PROCESS_BASIC_INFORMATION = mem::zeroed();
@@ -34,8 +54,8 @@ fn peb_process(process: &HANDLE, _is_wow: bool) -> Result<PEB> {
             process_information_length == return_length,
             "unexpected result from NtQueryInformationProcess"
         );
-        trace!("Finished call to NtQueryInformationProcess");
-        read_from_process(process, process_informations.PebBaseAddress)
+        trace!("PEB address: {:?}", process_informations.PebBaseAddress);
+        read_from_process(process, process_informations.PebBaseAddress as *mut Peb)
     }
 }
 

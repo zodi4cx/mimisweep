@@ -3,6 +3,7 @@ mod process;
 mod utils;
 
 use memory::MemoryHandle;
+use process::Peb;
 
 use anyhow::{bail, Context, Result};
 use log::{debug, trace};
@@ -16,7 +17,7 @@ use windows::{
 
 pub fn info() -> Result<()> {
     debug!("Opening Minesweeper process");
-    let Some(pid) = utils::process_pid_by_name("minesweeper.exe") else {
+    let Some(pid) = utils::process_pid_by_name("Minesweeper.exe") else {
         bail!("no minesweeper in memory!");
     };
     trace!("Minesweeper PID: {pid}");
@@ -31,8 +32,7 @@ pub fn info() -> Result<()> {
         MemoryHandle::Process(h_process)
     };
     debug!("Extracting PE headers");
-    let peb: PEB = process::peb(&a_remote, false).context("unable to access process' PEB")?;
-    trace!("Retrieved PEB base address");
-    debug!("{:#?}", peb.SessionId);
+    let peb: Peb = process::peb(&a_remote, false).context("unable to access process' PEB")?;
+    debug!("Image Base address: {:#?}", peb.image_base_address);
     Ok(())
 }

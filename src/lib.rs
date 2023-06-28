@@ -1,6 +1,5 @@
 mod memory;
 mod process;
-mod structs;
 mod utils;
 
 use memory::MemoryHandle;
@@ -46,7 +45,7 @@ lazy_static! {
 }
 
 #[repr(C)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct MinesweeperElement {
     cb_elements: u32,
     unk0: u32,
@@ -66,6 +65,16 @@ impl Default for MinesweeperElement {
             unk2: 0,
             unk3: 0,
         }
+    }
+}
+
+#[derive(Clone)]
+#[repr(C)]
+struct PMinesweeperElement(*const MinesweeperElement);
+
+impl Default for PMinesweeperElement {
+    fn default() -> Self {
+        PMinesweeperElement(std::ptr::null())
     }
 }
 
@@ -225,28 +234,26 @@ fn parse_raw_board(
 ) -> Result<()> {
     let root_element = memory::copy(memory, base).context("failed to retrieve root element")?;
     let columns = root_element.cb_elements as usize;
-    let columns_data = memory::copy_array(
-        memory,
-        root_element.elements as *const MinesweeperElement,
-        columns,
-    )
-    .context("failed to retrieve columns")?;
+    let columns_data: Vec<PMinesweeperElement> =
+        memory::copy_array(memory, root_element.elements as *const _, columns)
+            .context("failed to retrieve column pointers")?;
     for (c, column) in columns_data.iter().enumerate() {
+        let column = memory::copy(memory, column.0 as *const MinesweeperElement)
+            .context("failed to retrieve column data")?;
         let rows = column.cb_elements as usize;
-        let rows_data =
-            memory::copy_array(memory, column.elements as *const MinesweeperElement, rows)
-                .context(format!("failed to retrieve rows from column {c}"))?;
-        for (r, row) in rows_data.iter().enumerate() {
-            match visible {
-                Visibility::Revealed => {
-                    let index = memory::copy(memory, row.elements as *const u32)
-                        .context(format!("failed to retrieve data from {r} r x {c} c"))?;
-                    board.insert(&DISP_MINESWEEPER[index as usize], r, c)?;
+        match visible {
+            Visibility::Revealed => {
+                let rows_data = memory::copy_array(memory, column.elements as *const u32, rows)
+                    .context(format!("failed to retrieve rows from column {c}"))?;
+                for (r, row) in rows_data.iter().enumerate() {
+                    board.insert(&DISP_MINESWEEPER[*row as usize], r, c)?;
                 }
-                Visibility::Hidden => {
-                    let index = memory::copy(memory, row.elements as *const u8)
-                        .context(format!("failed to retrieve data from {r} r x {c} c"))?;
-                    if index != 0 {
+            }
+            Visibility::Hidden => {
+                let rows_data = memory::copy_array(memory, column.elements as *const u8, rows)
+                    .context(format!("failed to retrieve rows from column {c}"))?;
+                for (r, row) in rows_data.iter().enumerate() {
+                    if *row != 0 {
                         board.insert(&"*".on_red(), r, c)?;
                     }
                 }

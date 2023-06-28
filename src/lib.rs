@@ -1,14 +1,19 @@
 mod memory;
 mod process;
-mod utils;
 mod structs;
+mod utils;
 
 use memory::MemoryHandle;
 use process::ImageNtHeaders;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
+use colored::*;
+use lazy_static::lazy_static;
 use log::{debug, trace};
-use std::ffi::c_void;
+use std::{
+    ffi::c_void,
+    fmt::{self, Display},
+};
 #[allow(unused_imports)]
 use windows::Win32::{
     Foundation::*,
@@ -20,7 +25,28 @@ const WIN6_SAFE_GET_SINGLETON: [u8; 14] = [
 ];
 const OFFS_WIN6_TO_G: isize = -21;
 
+lazy_static! {
+    static ref DISP_MINESWEEPER: Vec<ColoredString> = vec![
+        "0".into(),
+        "1".blue(),
+        "2".green(),
+        "3".red(),
+        "4".purple(),
+        "5".truecolor(94, 9, 28),
+        "6".cyan(),
+        "7".bright_blue(),
+        "8".bright_green(),
+        ".".into(),
+        "F".on_red(),
+        "?".on_white(),
+        " ".into(),
+        "!".red(),
+        "!".red().bold(),
+    ];
+}
+
 #[repr(C)]
+#[derive(Clone)]
 struct MinesweeperElement {
     cb_elements: u32,
     unk0: u32,
@@ -28,6 +54,19 @@ struct MinesweeperElement {
     elements: *mut c_void,
     unk2: u32,
     unk3: u32,
+}
+
+impl Default for MinesweeperElement {
+    fn default() -> Self {
+        MinesweeperElement {
+            cb_elements: 0,
+            unk0: 0,
+            unk1: 0,
+            elements: std::ptr::null_mut(),
+            unk2: 0,
+            unk3: 0,
+        }
+    }
 }
 
 #[repr(C)]
@@ -60,6 +99,47 @@ struct MinesweeperGame {
     p_node_base: *mut c_void,
     p_board_canvas: *mut c_void,
     p_board: *mut MinesweeperBoard,
+}
+
+struct Board {
+    rows: usize,
+    columns: usize,
+    data: Vec<Vec<ColoredString>>,
+}
+
+impl Board {
+    fn new(rows: usize, columns: usize) -> Board {
+        Board {
+            rows,
+            columns,
+            data: vec![vec![" ".into(); columns]; rows],
+        }
+    }
+
+    fn insert(&mut self, value: &ColoredString, row: usize, column: usize) -> Result<()> {
+        ensure!(row < self.rows, "Row {} does not exist", row);
+        ensure!(column < self.columns, "Column {} does not exist", column);
+        self.data[row][column] = value.clone();
+        Ok(())
+    }
+}
+
+impl Display for Board {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+        for r in 0..self.rows {
+            write!(f, "\t")?;
+            for c in 0..self.columns {
+                write!(f, "{} ", self.data[r][c])?;
+            }
+            write!(f, "\n")?;
+        }
+        Ok(())
+    }
+}
+
+enum Visibility {
+    Revealed,
+    Hidden,
 }
 
 pub fn info() -> Result<()> {
@@ -113,6 +193,65 @@ pub fn info() -> Result<()> {
     trace!("Game address: {:?}", p_game);
     let game = memory::copy(&a_remote, p_game)?;
     let board = memory::copy(&a_remote, game.p_board)?;
-    println!("Field: {} r x {} c, Mines: {}", board.cb_rows, board.cb_columns, board.cb_mines);
+    println!(
+        "Field: {} r x {} c, Mines: {}",
+        board.cb_rows, board.cb_columns, board.cb_mines
+    );
+    debug!("Parsing data from game board");
+    let mut parsed_board = Board::new(board.cb_rows as usize, board.cb_columns as usize);
+    parse_raw_board(
+        &a_remote,
+        &mut parsed_board,
+        board.ref_visibles,
+        Visibility::Revealed,
+    )
+    .context("Unexpected error parsing visible fields")?;
+    parse_raw_board(
+        &a_remote,
+        &mut parsed_board,
+        board.ref_mines,
+        Visibility::Hidden,
+    )
+    .context("Unexpected error parsing mine fields")?;
+    println!("\n{parsed_board}");
+    Ok(())
+}
+
+fn parse_raw_board(
+    memory: &MemoryHandle,
+    board: &mut Board,
+    base: *const MinesweeperElement,
+    visible: Visibility,
+) -> Result<()> {
+    let root_element = memory::copy(memory, base).context("failed to retrieve root element")?;
+    let columns = root_element.cb_elements as usize;
+    let columns_data = memory::copy_array(
+        memory,
+        root_element.elements as *const MinesweeperElement,
+        columns,
+    )
+    .context("failed to retrieve columns")?;
+    for (c, column) in columns_data.iter().enumerate() {
+        let rows = column.cb_elements as usize;
+        let rows_data =
+            memory::copy_array(memory, column.elements as *const MinesweeperElement, rows)
+                .context(format!("failed to retrieve rows from column {c}"))?;
+        for (r, row) in rows_data.iter().enumerate() {
+            match visible {
+                Visibility::Revealed => {
+                    let index = memory::copy(memory, row.elements as *const u32)
+                        .context(format!("failed to retrieve data from {r} r x {c} c"))?;
+                    board.insert(&DISP_MINESWEEPER[index as usize], r, c)?;
+                }
+                Visibility::Hidden => {
+                    let index = memory::copy(memory, row.elements as *const u8)
+                        .context(format!("failed to retrieve data from {r} r x {c} c"))?;
+                    if index != 0 {
+                        board.insert(&"*".on_red(), r, c)?;
+                    }
+                }
+            }
+        }
+    }
     Ok(())
 }

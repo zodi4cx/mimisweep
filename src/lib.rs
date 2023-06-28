@@ -37,7 +37,7 @@ lazy_static! {
         "8".bright_green(),
         ".".into(),
         "F".on_red(),
-        "?".on_white(),
+        "?".black().on_white(),
         " ".into(),
         "!".red(),
         "!".red().bold(),
@@ -254,7 +254,7 @@ fn parse_raw_board(
                     .context(format!("failed to retrieve rows from column {c}"))?;
                 for (r, row) in rows_data.iter().enumerate() {
                     if *row != 0 {
-                        board.insert(&"*".on_red(), r, c)?;
+                        board.insert(&"*".bright_red(), r, c)?;
                     }
                 }
             }

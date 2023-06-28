@@ -59,6 +59,7 @@ fn read_from_process<T>(process: HANDLE, data_ptr: *const T) -> Result<T> {
     .ok_or(anyhow!("error reading memory of remote process"))
 }
 
+// TODO: refactor this into a single function?
 pub fn copy_array<T>(memory: &MemoryHandle, data_ptr: *const T, count: usize) -> Result<Vec<T>>
 where
     T: Clone + Default,

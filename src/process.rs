@@ -3,6 +3,7 @@ use super::memory::{self, MemoryHandle};
 use anyhow::{anyhow, ensure, Result};
 use log::trace;
 use std::{ffi::c_void, mem};
+use windows::Win32::System::SystemInformation::IMAGE_FILE_MACHINE_I386;
 #[allow(unused_imports)]
 use windows::Win32::{
     Foundation::*,
@@ -59,16 +60,47 @@ fn peb_process(memory: &MemoryHandle, _is_wow: bool) -> Result<Peb> {
     }
 }
 
-// TODO: Should return IMAGE_NT_HEADERS32 if the process is x86
-pub fn nt_headers(process: &MemoryHandle, base: *const c_void) -> Result<IMAGE_NT_HEADERS64> {
+#[repr(C)]
+struct ImageNtHeadersCommon {
+    signature: u32,
+    file_header: IMAGE_FILE_HEADER,
+    // optional header omitted (architecture dependant)
+}
+
+pub enum ImageNtHeaders {
+    X32(IMAGE_NT_HEADERS32),
+    X64(IMAGE_NT_HEADERS64),
+}
+
+impl ImageNtHeaders {
+    fn is_valid(&self) -> bool {
+        match self {
+            Self::X32(header) => header.Signature == IMAGE_NT_SIGNATURE,
+            Self::X64(header) => header.Signature == IMAGE_NT_SIGNATURE,
+        }
+    }
+}
+
+pub fn nt_headers(process: &MemoryHandle, base: *const c_void) -> Result<ImageNtHeaders> {
     let header_image_dos: IMAGE_DOS_HEADER = memory::copy(process, base as *const _)?;
     ensure!(
         header_image_dos.e_magic == IMAGE_DOS_SIGNATURE,
         "invalid DOS signature"
     );
     let p_nt_headers = unsafe { base.offset(header_image_dos.e_lfanew as isize) };
-    let nt_headers: IMAGE_NT_HEADERS64 = memory::copy(process, p_nt_headers as *const _)?;
-    (nt_headers.Signature == IMAGE_NT_SIGNATURE)
+    let nt_common: ImageNtHeadersCommon = memory::copy(process, p_nt_headers as *const _)?;
+    let nt_headers = match nt_common.file_header.Machine {
+        IMAGE_FILE_MACHINE_I386 => {
+            let headers_32: IMAGE_NT_HEADERS32 = memory::copy(process, p_nt_headers as *const _)?;
+            ImageNtHeaders::X32(headers_32)
+        }
+        _ => {
+            let headers_64: IMAGE_NT_HEADERS64 = memory::copy(process, p_nt_headers as *const _)?;
+            ImageNtHeaders::X64(headers_64)
+        }
+    };
+    nt_headers
+        .is_valid()
         .then_some(nt_headers)
         .ok_or(anyhow!("invalid NT signature"))
 }

@@ -3,6 +3,7 @@ mod process;
 mod utils;
 
 use memory::MemoryHandle;
+use process::ImageNtHeaders;
 
 use anyhow::{bail, Context, Result};
 use log::{debug, trace};
@@ -31,9 +32,16 @@ pub fn info() -> Result<()> {
     debug!("Extracting PE headers");
     let peb = process::peb(&a_remote, false).context("unable to access process' PEB")?;
     trace!("PEB Image Base address: {:#?}", peb.image_base_address);
-    let ntheaders: IMAGE_NT_HEADERS64 = process::nt_headers(&a_remote, peb.image_base_address)
+    let ntheaders = process::nt_headers(&a_remote, peb.image_base_address)
         .context("unable to access process' NT header")?;
-    let image_base = ntheaders.OptionalHeader.ImageBase;
+    let (image_base, image_size) = match ntheaders {
+        ImageNtHeaders::X64(headers) => (
+            headers.OptionalHeader.ImageBase,
+            headers.OptionalHeader.SizeOfImage,
+        ),
+        ImageNtHeaders::X32(_) => bail!("x86 minesweeper not yet supported"),
+    };
     trace!("NT Image Base address:  {:#018x}", image_base);
+    trace!("NT Image size: {:#x}", image_size);
     Ok(())
 }

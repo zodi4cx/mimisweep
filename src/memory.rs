@@ -36,16 +36,16 @@ impl Deref for MemoryHandle {
 
 pub fn copy<T>(memory: &MemoryHandle, data_ptr: *const T) -> Result<T> {
     match memory {
-        MemoryHandle::Process(_) => read_from_process(memory, data_ptr),
+        MemoryHandle::Process(handle) => read_from_process(*handle, data_ptr),
         _ => unimplemented!("copy not implemented for {:?}", memory),
     }
 }
 
-fn read_from_process<T>(process: &MemoryHandle, data_ptr: *const T) -> Result<T> {
+fn read_from_process<T>(process: HANDLE, data_ptr: *const T) -> Result<T> {
     let mut data: T = unsafe { mem::zeroed() };
     unsafe {
         ReadProcessMemory(
-            **process,
+            process,
             data_ptr as *mut _,
             addr_of_mut!(data) as *mut _,
             mem::size_of::<T>(),

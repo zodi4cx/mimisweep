@@ -5,13 +5,17 @@ mod utils;
 use memory::MemoryHandle;
 use process::ImageNtHeaders;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use log::{debug, trace};
 #[allow(unused_imports)]
 use windows::Win32::{
     Foundation::*,
     System::{Diagnostics::Debug::*, Kernel::*, Threading::*},
 };
+
+const WIN6_SAFE_GET_SINGLETON: [u8; 14] = [
+    0x48, 0x89, 0x44, 0x24, 0x70, 0x48, 0x85, 0xc0, 0x74, 0x0a, 0x48, 0x8b, 0xc8, 0xe8,
+];
 
 pub fn info() -> Result<()> {
     debug!("Opening Minesweeper process");
@@ -43,5 +47,14 @@ pub fn info() -> Result<()> {
     };
     trace!("NT Image Base address:  {:#018x}", image_base);
     trace!("NT Image size: {:#x}", image_size);
+    debug!("Finding game structure in-memory");
+    let get_singleton_offset = memory::search(
+        &WIN6_SAFE_GET_SINGLETON,
+        &a_remote,
+        image_base as *const _,
+        image_size,
+    )?
+    .ok_or(anyhow!("singleton pattern not found in-memory"))?;
+    trace!("Get Singleton at offset {:#x}", get_singleton_offset);
     Ok(())
 }

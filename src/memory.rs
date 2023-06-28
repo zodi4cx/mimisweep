@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result, Context};
 use memchr::memmem;
 use std::{ffi::c_void, mem, ops::Deref, ptr::addr_of_mut};
 use windows::Win32::{Foundation::*, System::Diagnostics::Debug::*};
@@ -99,7 +99,8 @@ pub fn search(
 ) -> Result<Option<usize>> {
     match memory {
         MemoryHandle::Process(_) | MemoryHandle::File(_) | MemoryHandle::Kernel(_) => {
-            let data: Vec<u8> = copy_array(memory, base as *const _, size as usize)?;
+            let data: Vec<u8> = copy_array(memory, base as *const _, size as usize)
+                .context("failed to copy haystack")?;
             Ok(memmem::find(&data, pattern))
         }
         _ => unimplemented!("search not implemented for {:?}", memory),

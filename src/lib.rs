@@ -54,7 +54,7 @@ pub fn info() -> Result<()> {
         image_base as *const _,
         image_size,
     )?
-    .ok_or(anyhow!("singleton pattern not found in-memory"))?;
+    .ok_or(anyhow!("Get Singleton pattern not found in-memory"))?;
     trace!("Get Singleton at offset {:#x}", get_singleton_offset);
     Ok(())
 }

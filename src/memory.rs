@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result, Context};
+use anyhow::{anyhow, Context, Result};
 use memchr::memmem;
 use std::{ffi::c_void, mem, ops::Deref, ptr::addr_of_mut};
 use windows::Win32::{Foundation::*, System::Diagnostics::Debug::*};
@@ -36,14 +36,14 @@ impl Deref for MemoryHandle {
     }
 }
 
-pub fn copy<T>(memory: &MemoryHandle, data_ptr: *const T) -> Result<T> {
+pub unsafe fn copy<T>(memory: &MemoryHandle, data_ptr: *const T) -> Result<T> {
     match memory {
         MemoryHandle::Process(handle) => read_from_process(*handle, data_ptr),
         _ => unimplemented!("copy not implemented for {:?}", memory),
     }
 }
 
-fn read_from_process<T>(process: HANDLE, data_ptr: *const T) -> Result<T> {
+unsafe fn read_from_process<T>(process: HANDLE, data_ptr: *const T) -> Result<T> {
     let mut data: T = unsafe { mem::zeroed() };
     unsafe {
         ReadProcessMemory(
@@ -59,8 +59,11 @@ fn read_from_process<T>(process: HANDLE, data_ptr: *const T) -> Result<T> {
     .ok_or(anyhow!("error reading memory of remote process"))
 }
 
-// TODO: refactor this into a single function?
-pub fn copy_array<T>(memory: &MemoryHandle, data_ptr: *const T, count: usize) -> Result<Vec<T>>
+pub unsafe fn copy_array<T>(
+    memory: &MemoryHandle,
+    data_ptr: *const T,
+    count: usize,
+) -> Result<Vec<T>>
 where
     T: Clone + Default,
 {
@@ -70,7 +73,11 @@ where
     }
 }
 
-fn read_array_from_process<T>(process: HANDLE, data_ptr: *const T, count: usize) -> Result<Vec<T>>
+unsafe fn read_array_from_process<T>(
+    process: HANDLE,
+    data_ptr: *const T,
+    count: usize,
+) -> Result<Vec<T>>
 where
     T: Clone + Default,
 {
@@ -100,7 +107,7 @@ pub fn search(
 ) -> Result<Option<usize>> {
     match memory {
         MemoryHandle::Process(_) | MemoryHandle::File(_) | MemoryHandle::Kernel(_) => {
-            let data: Vec<u8> = copy_array(memory, base as *const _, size as usize)
+            let data: Vec<u8> = unsafe { copy_array(memory, base as *const _, size as usize) }
                 .context("failed to copy haystack")?;
             Ok(memmem::find(&data, pattern))
         }

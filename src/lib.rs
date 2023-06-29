@@ -189,44 +189,46 @@ pub fn info() -> Result<()> {
         "Get Singleton at offset {:#x}",
         get_singleton_instruction_offset
     );
-    let pp_get_singleton =
-        unsafe { image_base.offset(get_singleton_instruction_offset as isize + OFFS_WIN6_TO_G) };
-    let get_singleton_offset: u32 = memory::copy(&a_remote, pp_get_singleton as *const _)?;
-    // if minesweeper is x64
-    let p_get_singleton = unsafe {
-        pp_get_singleton
-            .offset(1 + std::mem::size_of::<u32>() as isize + get_singleton_offset as isize)
+    let board = unsafe {
+        let pp_get_singleton =
+            image_base.offset(get_singleton_instruction_offset as isize + OFFS_WIN6_TO_G);
+        let get_singleton_offset: u32 = memory::copy(&a_remote, pp_get_singleton as *const _)?;
+        // if minesweeper is x64
+        let p_get_singleton = pp_get_singleton
+            .offset(1 + std::mem::size_of::<u32>() as isize + get_singleton_offset as isize);
+        trace!("G address: {:?}", p_get_singleton);
+        let p_game: *const MinesweeperGame = memory::copy(&a_remote, p_get_singleton as *const _)?;
+        trace!("Game address: {:?}", p_game);
+        let game = memory::copy(&a_remote, p_game)?;
+        memory::copy(&a_remote, game.p_board)?
     };
-    trace!("G address: {:?}", p_get_singleton);
-    let p_game: *const MinesweeperGame = memory::copy(&a_remote, p_get_singleton as *const _)?;
-    trace!("Game address: {:?}", p_game);
-    let game = memory::copy(&a_remote, p_game)?;
-    let board = memory::copy(&a_remote, game.p_board)?;
     println!(
         "Field: {} r x {} c, Mines: {}",
         board.cb_rows, board.cb_columns, board.cb_mines
     );
     debug!("Parsing data from game board");
     let mut parsed_board = Board::new(board.cb_rows as usize, board.cb_columns as usize);
-    parse_raw_board(
-        &a_remote,
-        &mut parsed_board,
-        board.ref_visibles,
-        Visibility::Revealed,
-    )
-    .context("Unexpected error parsing visible fields")?;
-    parse_raw_board(
-        &a_remote,
-        &mut parsed_board,
-        board.ref_mines,
-        Visibility::Hidden,
-    )
-    .context("Unexpected error parsing mine fields")?;
+    unsafe {
+        parse_raw_board(
+            &a_remote,
+            &mut parsed_board,
+            board.ref_visibles,
+            Visibility::Revealed,
+        )
+        .context("Unexpected error parsing visible fields")?;
+        parse_raw_board(
+            &a_remote,
+            &mut parsed_board,
+            board.ref_mines,
+            Visibility::Hidden,
+        )
+        .context("Unexpected error parsing mine fields")?;
+    }
     println!("\n{parsed_board}");
     Ok(())
 }
 
-fn parse_raw_board(
+unsafe fn parse_raw_board(
     memory: &MemoryHandle,
     board: &mut Board,
     base: *const MinesweeperElement,

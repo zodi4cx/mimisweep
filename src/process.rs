@@ -82,13 +82,13 @@ impl ImageNtHeaders {
 }
 
 pub fn nt_headers(process: &MemoryHandle, base: *const c_void) -> Result<ImageNtHeaders> {
-    let header_image_dos: IMAGE_DOS_HEADER = unsafe { memory::copy(process, base as *const _)? };
+    let dos_header: IMAGE_DOS_HEADER = unsafe { memory::copy(process, base as *const _)? };
     ensure!(
-        header_image_dos.e_magic == IMAGE_DOS_SIGNATURE,
+        dos_header.e_magic == IMAGE_DOS_SIGNATURE,
         "invalid DOS signature"
     );
     let nt_headers = unsafe {
-        let p_nt_headers = base.offset(header_image_dos.e_lfanew as isize);
+        let p_nt_headers = base.offset(dos_header.e_lfanew as isize);
         let nt_common: ImageNtHeadersCommon = memory::copy(process, p_nt_headers as *const _)?;
         match nt_common.file_header.Machine {
             IMAGE_FILE_MACHINE_I386 => {

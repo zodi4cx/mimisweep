@@ -140,7 +140,7 @@ impl Display for Board {
             for c in 0..self.columns {
                 write!(f, "{} ", self.data[r][c])?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
         Ok(())
     }
@@ -167,7 +167,7 @@ pub fn info() -> Result<()> {
         trace!("Process handle: {:?}", h_process);
         MemoryHandle::Process(h_process)
     };
-    debug!("Extracting PE headers");
+    debug!("Accessing Minesweeper's PEB");
     let peb = process::peb(&a_remote, false).context("unable to access process' PEB")?;
     trace!("PEB Image Base address: {:#?}", peb.image_base_address);
     let ntheaders = process::nt_headers(&a_remote, peb.image_base_address)
@@ -190,14 +190,13 @@ pub fn info() -> Result<()> {
         get_singleton_instruction_offset
     );
     let board = unsafe {
-        let pp_get_singleton =
+        let p_g_offset =
             image_base.offset(get_singleton_instruction_offset as isize + OFFS_WIN6_TO_G);
-        let get_singleton_offset: u32 = memory::copy(&a_remote, pp_get_singleton as *const _)?;
+        let g_offset: u32 = memory::copy(&a_remote, p_g_offset as *const _)?;
         // if minesweeper is x64
-        let p_get_singleton = pp_get_singleton
-            .offset(1 + std::mem::size_of::<u32>() as isize + get_singleton_offset as isize);
-        trace!("G address: {:?}", p_get_singleton);
-        let p_game: *const MinesweeperGame = memory::copy(&a_remote, p_get_singleton as *const _)?;
+        let p_g = p_g_offset.offset(1 + std::mem::size_of::<u32>() as isize + g_offset as isize);
+        trace!("G address: {:?}", p_g);
+        let p_game: *const MinesweeperGame = memory::copy(&a_remote, p_g as *const _)?;
         trace!("Game address: {:?}", p_game);
         let game = memory::copy(&a_remote, p_game)?;
         memory::copy(&a_remote, game.p_board)?

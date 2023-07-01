@@ -45,7 +45,6 @@ lazy_static! {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
 struct MinesweeperElement {
     cb_elements: u32,
     unk0: u32,
@@ -53,19 +52,6 @@ struct MinesweeperElement {
     elements: *mut c_void,
     unk2: u32,
     unk3: u32,
-}
-
-impl Default for MinesweeperElement {
-    fn default() -> Self {
-        MinesweeperElement {
-            cb_elements: 0,
-            unk0: 0,
-            unk1: 0,
-            elements: std::ptr::null_mut(),
-            unk2: 0,
-            unk3: 0,
-        }
-    }
 }
 
 #[derive(Clone)]

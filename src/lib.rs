@@ -10,6 +10,7 @@ use colored::*;
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use std::{
+    collections::HashMap,
     ffi::c_void,
     fmt::{self, Display},
 };
@@ -137,11 +138,33 @@ enum Visibility {
     Hidden,
 }
 
+enum Version {
+    WindowsXP,
+    Windows7,
+}
+
+impl Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let version = match self {
+            Version::WindowsXP => "Windows XP",
+            Version::Windows7 => "Windows 7",
+        };
+        write!(f, "{}", version)
+    }
+}
+
 pub fn info() -> Result<()> {
+    let version_map = HashMap::from([
+        ("WINMINE.EXE", Version::WindowsXP),
+        ("Minesweeper.exe", Version::Windows7),
+    ]);
     debug!("Opening Minesweeper process");
-    let Some(pid) = utils::process_pid_by_name("Minesweeper.exe") else {
+    let Some((pid, version)) = version_map.iter().find_map(|(name, version)| {
+        utils::process_pid_by_name(name).and_then(|pid| Some((pid, version)))
+    }) else {
         bail!("no minesweeper in memory!");
     };
+    debug!("Detected {} version running", version);
     trace!("Minesweeper PID: {pid}");
     let a_remote = unsafe {
         let h_process: HANDLE = OpenProcess(
@@ -153,6 +176,17 @@ pub fn info() -> Result<()> {
         trace!("Process handle: {:?}", h_process);
         MemoryHandle::Process(h_process)
     };
+    match version {
+        Version::WindowsXP => info_windows_xp(a_remote),
+        Version::Windows7 => info_windows_7(a_remote),
+    }
+}
+
+fn info_windows_xp(_a_remote: MemoryHandle) -> Result<()> {
+    todo!()
+}
+
+fn info_windows_7(a_remote: MemoryHandle) -> Result<()> {
     debug!("Accessing Minesweeper's PEB");
     let peb = process::peb(&a_remote, false).context("unable to access process' PEB")?;
     trace!("PEB Image Base address: {:#?}", peb.image_base_address);

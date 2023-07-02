@@ -1,9 +1,10 @@
 use crate::memory::{self, MemoryHandle};
 use crate::process::{self, ImageNtHeaders};
-use crate::{Board, DISP_MINESWEEPER};
+use crate::Board;
 
 use anyhow::{anyhow, bail, Context, Result};
 use colored::*;
+use lazy_static::lazy_static;
 use log::{debug, trace};
 use std::ffi::c_void;
 
@@ -11,6 +12,26 @@ const WIN6_SAFE_GET_SINGLETON: [u8; 14] = [
     0x48, 0x89, 0x44, 0x24, 0x70, 0x48, 0x85, 0xc0, 0x74, 0x0a, 0x48, 0x8b, 0xc8, 0xe8,
 ];
 const OFFS_WIN6_TO_G: isize = -21;
+
+lazy_static! {
+    static ref DISP_MINESWEEPER: Vec<ColoredString> = vec![
+        "0".into(),
+        "1".blue(),
+        "2".green(),
+        "3".red(),
+        "4".purple(),
+        "5".truecolor(94, 9, 28),
+        "6".cyan(),
+        "7".bright_blue(),
+        "8".bright_green(),
+        ".".into(),
+        "F".on_red(),
+        "?".black().on_white(),
+        " ".into(),
+        "!".red(),
+        "!".red().bold(),
+    ];
+}
 
 #[repr(C)]
 struct MinesweeperElement {
@@ -69,7 +90,7 @@ enum Visibility {
     Hidden,
 }
 
-pub fn info(a_remote: MemoryHandle) -> Result<()> {
+pub fn board(a_remote: MemoryHandle) -> Result<Board> {
     debug!("Accessing Minesweeper's PEB");
     let peb = process::peb(&a_remote, false).context("unable to access process' PEB")?;
     trace!("PEB Image Base address: {:#?}", peb.image_base_address);
@@ -104,12 +125,12 @@ pub fn info(a_remote: MemoryHandle) -> Result<()> {
         let game = memory::copy(&a_remote, p_game)?;
         memory::copy(&a_remote, game.p_board)?
     };
-    println!(
-        "Field: {} r x {} c, Mines: {}",
-        board.cb_rows, board.cb_columns, board.cb_mines
-    );
     debug!("Parsing data from game board");
-    let mut parsed_board = Board::new(board.cb_rows as usize, board.cb_columns as usize);
+    let mut parsed_board = Board::new(
+        board.cb_rows as usize,
+        board.cb_columns as usize,
+        board.cb_mines,
+    );
     unsafe {
         parse_raw_board(
             &a_remote,
@@ -126,8 +147,7 @@ pub fn info(a_remote: MemoryHandle) -> Result<()> {
         )
         .context("Unexpected error parsing mine fields")?;
     }
-    println!("\n{parsed_board}");
-    Ok(())
+    Ok(parsed_board)
 }
 
 unsafe fn parse_raw_board(

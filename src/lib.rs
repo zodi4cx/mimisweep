@@ -8,7 +8,6 @@ use versions::{windows_7 as win7, windows_xp as winxp};
 
 use anyhow::{bail, ensure, Context, Result};
 use colored::*;
-use lazy_static::lazy_static;
 use log::{debug, trace};
 use std::{
     collections::HashMap,
@@ -16,35 +15,17 @@ use std::{
 };
 use windows::Win32::{Foundation::*, System::Threading::*};
 
-lazy_static! {
-    static ref DISP_MINESWEEPER: Vec<ColoredString> = vec![
-        "0".into(),
-        "1".blue(),
-        "2".green(),
-        "3".red(),
-        "4".purple(),
-        "5".truecolor(94, 9, 28),
-        "6".cyan(),
-        "7".bright_blue(),
-        "8".bright_green(),
-        ".".into(),
-        "F".on_red(),
-        "?".black().on_white(),
-        " ".into(),
-        "!".red(),
-        "!".red().bold(),
-    ];
-}
-
-struct Board {
+pub struct Board {
+    mines: u32,
     rows: usize,
     columns: usize,
     data: Vec<Vec<ColoredString>>,
 }
 
 impl Board {
-    fn new(rows: usize, columns: usize) -> Board {
+    fn new(rows: usize, columns: usize, mines: u32) -> Board {
         Board {
+            mines,
             rows,
             columns,
             data: vec![vec![" ".into(); columns]; rows],
@@ -110,8 +91,15 @@ pub fn info() -> Result<()> {
         trace!("Process handle: {:?}", h_process);
         MemoryHandle::Process(h_process)
     };
-    match version {
-        Version::WindowsXP => winxp::info(a_remote),
-        Version::Windows7 => win7::info(a_remote),
+    let board = match version {
+        Version::WindowsXP => winxp::board(a_remote),
+        Version::Windows7 => win7::board(a_remote),
     }
+    .context("unable to retrieve game board")?;
+    println!(
+        "Field: {} r x {} c, Mines: {}",
+        board.rows, board.columns, board.mines
+    );
+    println!("\n{board}");
+    Ok(())
 }

@@ -1,3 +1,6 @@
+//! This modules contains the necessary functions to interface with the
+//! Windows XP version of Minesweeper.
+
 use crate::memory::{self, MemoryHandle};
 use crate::Board;
 
@@ -48,6 +51,7 @@ struct MinesweeperBoard {
     data: [u8; WINXP_BOARD_SIZE],
 }
 
+/// Retrieve the board state from the provided process.
 pub fn board(a_remote: MemoryHandle) -> Result<Board> {
     debug!("Reading game board state");
     let board = unsafe {

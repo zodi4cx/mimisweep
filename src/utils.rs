@@ -1,3 +1,5 @@
+//! Collection of tools frequently reused by different modules.
+
 use sysinfo::{PidExt, ProcessExt, System, SystemExt};
 
 /// Given an **exact** process name, it returns its PID, if available.

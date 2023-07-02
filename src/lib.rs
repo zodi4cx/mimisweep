@@ -1,12 +1,19 @@
-mod memory;
-mod process;
-mod utils;
+//! Implementation of the mimikatz minesweper module, supporting the Windows XP
+//! and Windows 7 variants of the game.
+
+#![warn(missing_docs)]
+
+pub mod memory;
+pub mod process;
+pub mod utils;
 mod versions;
+
+pub use anyhow::Result;
 
 use memory::MemoryHandle;
 use versions::{windows_7 as win7, windows_xp as winxp};
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, ensure, Context};
 use colored::*;
 use log::{debug, trace};
 use std::{
@@ -15,6 +22,9 @@ use std::{
 };
 use windows::Win32::{Foundation::*, System::Threading::*};
 
+/// Abstract representation of a Minesweeper game board, meant to be used
+/// for displaying the game state to the user.
+#[doc(hidden)]
 pub struct Board {
     mines: u32,
     rows: usize,
@@ -68,6 +78,12 @@ impl Display for Version {
     }
 }
 
+/// Command for retrieving information about the state of an active Minesweeper
+/// game.
+///
+/// Running process will be searched for a known game implemenetation. If
+/// found, the game is accessed in-memory and the information relevant is retrieved
+/// and displayed on screen.
 pub fn info() -> Result<()> {
     let version_map = HashMap::from([
         ("Minesweeper.exe", Version::Windows7),

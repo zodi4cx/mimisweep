@@ -1,3 +1,5 @@
+//! Tools for interaction with Windows processes.
+
 use super::memory::{self, MemoryHandle};
 
 use anyhow::{anyhow, ensure, Result};
@@ -10,8 +12,9 @@ use windows::Win32::{
     System::{Diagnostics::Debug::*, Kernel::*, SystemServices::*, Threading::*},
 };
 
-/// PEB definition that overrides windows' PEB struct based on online documentation.
+/// PEB definition that overrides windows' [`PEB`] struct based on WinDbg's symbols.
 #[repr(C)]
+#[allow(missing_docs)]
 pub struct Peb {
     pub inherited_address_space: u8,
     pub read_image_file_exec_options: u8,
@@ -24,13 +27,15 @@ pub struct Peb {
     // ...
 }
 
+/// BitField field of the [`Peb`] structure.
 #[repr(C)]
+#[allow(missing_docs)]
 pub struct BitField {
     pub image_uses_large_pages: u8,
     pub spare_bits: u8,
 }
 
-/// Retrieves the PEB structure of the given memory handle
+/// Retrieves the [`Peb`] from the given memory handle.
 pub fn peb(memory: &MemoryHandle, _is_wow: bool) -> Result<Peb> {
     match memory {
         MemoryHandle::Process(_) => peb_process(memory, _is_wow),
@@ -67,36 +72,55 @@ struct ImageNtHeadersCommon {
     // optional header omitted (architecture dependant)
 }
 
+/// Wrapper for the NT Headers struct of different architectures.
 pub enum ImageNtHeaders {
-    X32(IMAGE_NT_HEADERS32),
+    /// NT headers of a x86 PE file.
+    X86(IMAGE_NT_HEADERS32),
+    /// NT headers of a x64 PE file.
     X64(IMAGE_NT_HEADERS64),
 }
 
 impl ImageNtHeaders {
     fn is_valid(&self) -> bool {
         match self {
-            Self::X32(header) => header.Signature == IMAGE_NT_SIGNATURE,
+            Self::X86(header) => header.Signature == IMAGE_NT_SIGNATURE,
             Self::X64(header) => header.Signature == IMAGE_NT_SIGNATURE,
         }
     }
 }
 
-pub fn nt_headers(process: &MemoryHandle, base: *const c_void) -> Result<ImageNtHeaders> {
-    let dos_header: IMAGE_DOS_HEADER = unsafe { memory::copy(process, base as *const _)? };
+/// Retrieves the NT Header for a given process.
+///
+/// # Safety
+///
+/// The provided image base pointer must be valid. The integrity of the header
+/// is checked through the [`IMAGE_DOS_HEADER`] and the [`IMAGE_NT_HEADERS32`]
+/// [`IMAGE_NT_HEADERS64`] signatures before returning the result.
+pub unsafe fn nt_headers(
+    process: &MemoryHandle,
+    image_base: *const c_void,
+) -> Result<ImageNtHeaders> {
+    ensure!(
+        matches!(process, MemoryHandle::Process(_)),
+        "a process handle must be provided"
+    );
+    let dos_header: IMAGE_DOS_HEADER = unsafe { memory::copy(process, image_base as *const _)? };
     ensure!(
         dos_header.e_magic == IMAGE_DOS_SIGNATURE,
         "invalid DOS signature"
     );
-    let nt_headers = unsafe {
-        let p_nt_headers = base.offset(dos_header.e_lfanew as isize);
+    let nt_headers = {
+        let p_nt_headers = image_base.offset(dos_header.e_lfanew as isize);
         let nt_common: ImageNtHeadersCommon = memory::copy(process, p_nt_headers as *const _)?;
         match nt_common.file_header.Machine {
             IMAGE_FILE_MACHINE_I386 => {
-                let headers_32: IMAGE_NT_HEADERS32 = memory::copy(process, p_nt_headers as *const _)?;
-                ImageNtHeaders::X32(headers_32)
+                let headers_32: IMAGE_NT_HEADERS32 =
+                    memory::copy(process, p_nt_headers as *const _)?;
+                ImageNtHeaders::X86(headers_32)
             }
             _ => {
-                let headers_64: IMAGE_NT_HEADERS64 = memory::copy(process, p_nt_headers as *const _)?;
+                let headers_64: IMAGE_NT_HEADERS64 =
+                    memory::copy(process, p_nt_headers as *const _)?;
                 ImageNtHeaders::X64(headers_64)
             }
         }

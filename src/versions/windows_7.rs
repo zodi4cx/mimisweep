@@ -1,3 +1,6 @@
+//! This modules contains the necessary functions to interface with the
+//! Windows 7 version of Minesweeper.
+
 use crate::memory::{self, MemoryHandle};
 use crate::process::{self, ImageNtHeaders};
 use crate::Board;
@@ -90,18 +93,19 @@ enum Visibility {
     Hidden,
 }
 
+/// Retrieve the board state from the provided process.
 pub fn board(a_remote: MemoryHandle) -> Result<Board> {
     debug!("Accessing Minesweeper's PEB");
     let peb = process::peb(&a_remote, false).context("unable to access process' PEB")?;
     trace!("PEB Image Base address: {:#?}", peb.image_base_address);
-    let ntheaders = process::nt_headers(&a_remote, peb.image_base_address)
+    let ntheaders = unsafe { process::nt_headers(&a_remote, peb.image_base_address) }
         .context("unable to access process' NT header")?;
     let (image_base, image_size) = match ntheaders {
         ImageNtHeaders::X64(headers) => (
             headers.OptionalHeader.ImageBase as *const _,
             headers.OptionalHeader.SizeOfImage,
         ),
-        ImageNtHeaders::X32(_) => bail!("x86 minesweeper not yet supported"),
+        ImageNtHeaders::X86(_) => bail!("x86 minesweeper not yet supported"),
     };
     trace!("NT Image Base address:  {:?}", image_base);
     trace!("NT Image size: {:#x}", image_size);
@@ -117,7 +121,7 @@ pub fn board(a_remote: MemoryHandle) -> Result<Board> {
         let p_g_offset =
             image_base.offset(get_singleton_instruction_offset as isize + OFFS_WIN6_TO_G);
         let g_offset: u32 = memory::copy(&a_remote, p_g_offset as *const _)?;
-        // if minesweeper is x64
+        // if Minesweeper is x64
         let p_g = p_g_offset.offset(1 + std::mem::size_of::<u32>() as isize + g_offset as isize);
         trace!("G address: {:?}", p_g);
         let p_game: *const MinesweeperGame = memory::copy(&a_remote, p_g as *const _)?;

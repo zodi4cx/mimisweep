@@ -1,16 +1,24 @@
+//! Memory-releated tools used to interface with Windows processes.
+
 use anyhow::{anyhow, Context, Result};
 use memchr::memmem;
 use std::{ffi::c_void, mem, ops::Deref, ptr::addr_of_mut};
 use windows::Win32::{Foundation::*, System::Diagnostics::Debug::*};
 
 /// Memory handle abstraction for dealing with different types of memory access.
+/// Implements the RAII pattern for automatic deallocation of any associated handles.
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum MemoryHandle {
+    /// Own process memory
     Own,
+    /// Running process memory
     Process(HANDLE),
+    /// File access
     File(HANDLE),
+    /// Kernel access
     Kernel(HANDLE),
+    /// Memory dump
     Dump,
 }
 
@@ -36,6 +44,14 @@ impl Deref for MemoryHandle {
     }
 }
 
+/// Returns a copy of an object, read from the resource pointed by the given
+/// [`MemoryHandle`].
+///
+/// # Safety
+///
+/// The `data_ptr` argument is expected to point to a valid resource of the
+/// specified type. The caller is responsbile for checking if the returned object
+/// is indeed a valid instance of the requested type.
 pub unsafe fn copy<T>(memory: &MemoryHandle, data_ptr: *const T) -> Result<T> {
     match memory {
         MemoryHandle::Process(handle) => read_from_process(*handle, data_ptr),
@@ -59,6 +75,14 @@ unsafe fn read_from_process<T>(process: HANDLE, data_ptr: *const T) -> Result<T>
     .ok_or(anyhow!("error reading memory of remote process"))
 }
 
+/// Returns a vector of elements, read from the resource pointed by the given
+/// [`MemoryHandle`].
+///
+/// # Safety
+///
+/// The `data_ptr` argument is expected to point to a valid resource of the
+/// specified type. The caller is responsbile for checking if the returned vector
+/// holds copies of valid instances of the requested type.
 pub unsafe fn copy_array<T>(
     memory: &MemoryHandle,
     data_ptr: *const T,
@@ -99,6 +123,9 @@ where
     .ok_or(anyhow!("error reading memory of remote process"))
 }
 
+/// Searches a pattern of bytes in-memory, starting from the `base` address up
+/// to `size` bytes, returning the first coincidence. If the pattern is found,
+/// the index of the starting byte of the sequence is returned.
 pub fn search(
     pattern: &[u8],
     memory: &MemoryHandle,

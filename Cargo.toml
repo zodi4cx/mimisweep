@@ -1,5 +1,5 @@
 [package]
-name = "minesweeper"
+name = "mimisweeper"
 version = "0.1.0"
 edition = "2021"
 
@@ -23,10 +23,6 @@ features = [
     "Win32_System_SystemInformation",
     "Win32_System_SystemServices",
 ]
-
-[[bin]]
-name = "mimisweep"
-path = "src/main.rs"
 
 [profile.release]
 strip = "symbols"

@@ -95,7 +95,7 @@ impl ImageNtHeaders {
 ///
 /// The provided image base pointer must be valid. The integrity of the header
 /// is checked through the [`IMAGE_DOS_HEADER`] and the [`IMAGE_NT_HEADERS32`]
-/// [`IMAGE_NT_HEADERS64`] signatures before returning the result.
+/// / [`IMAGE_NT_HEADERS64`] signatures before returning the result.
 pub unsafe fn nt_headers(
     process: &MemoryHandle,
     image_base: *const c_void,

@@ -5,6 +5,7 @@ use super::memory::{self, MemoryHandle};
 use anyhow::{anyhow, ensure, Result};
 use log::trace;
 use std::{ffi::c_void, mem};
+use sysinfo::{PidExt, ProcessExt, System, SystemExt};
 use windows::Win32::System::SystemInformation::IMAGE_FILE_MACHINE_I386;
 #[allow(unused_imports)]
 use windows::Win32::{
@@ -33,6 +34,13 @@ pub struct Peb {
 pub struct BitField {
     pub image_uses_large_pages: u8,
     pub spare_bits: u8,
+}
+
+/// Given an **exact** process name, it returns its PID, if available.
+pub fn pid_by_name(process_name: &str) -> Option<u32> {
+    let system = System::new_all();
+    let mut processes = system.processes_by_exact_name(process_name);
+    (*processes).next().map(|process| process.pid().as_u32())
 }
 
 /// Retrieves the [`Peb`] from the given memory handle.

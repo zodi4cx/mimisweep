@@ -5,7 +5,6 @@
 
 pub mod memory;
 pub mod process;
-pub mod utils;
 mod versions;
 
 pub use anyhow::Result;
@@ -91,7 +90,7 @@ pub fn info() -> Result<()> {
     ]);
     debug!("Opening Minesweeper process");
     let Some((pid, version)) = version_map.iter().find_map(|(name, version)| {
-        utils::process_pid_by_name(name).map(|pid| (pid, version))
+        process::pid_by_name(name).map(|pid| (pid, version))
     }) else {
         bail!("no minesweeper in memory!");
     };

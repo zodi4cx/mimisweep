@@ -60,7 +60,7 @@ pub unsafe fn copy<T>(memory: &MemoryHandle, data_ptr: *const T) -> Result<T> {
 }
 
 unsafe fn read_from_process<T>(process: HANDLE, data_ptr: *const T) -> Result<T> {
-    let mut data: T = unsafe { mem::zeroed() };
+    let mut data: T = mem::zeroed();
     unsafe {
         ReadProcessMemory(
             process,
